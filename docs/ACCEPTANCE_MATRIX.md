@@ -100,12 +100,12 @@ add more tests freely, but don't rename these.
 
 | Criterion | Test | Status |
 |---|---|---|
-| Zero-trust chain | `test_scenario_a_confused_deputy_blocked` | todo |
-| Zero-trust chain | `test_scenario_b_full_pipeline_failover_tool_call_redaction` | todo |
-| Zero-trust chain | `test_scenario_c_validation_error_passes_through_gateway` | todo |
-| Zero-trust chain | `test_scenario_d_runaway_tenant_rate_limited` | todo |
-| Zero-trust chain | `test_scenario_e_total_failure_sanitized` | todo |
-| Observability | `test_single_correlation_id_visible_in_all_hops` (headers + T1 stderr + gateway logs) | todo |
-| Robustness | `test_stdio_downstream_id_rewriting_handles_concurrent_same_ids` | todo |
-| Robustness | `test_stdio_downstream_recovers_after_child_crash` | todo |
-| Demo | `test_e2e_demo_exits_zero` (runs `python -m control_plane.e2e_demo --fast`) | todo |
+| Zero-trust chain | `test_scenario_a_confused_deputy_blocked` | pass |
+| Zero-trust chain | `test_scenario_b_full_pipeline_failover_tool_call_redaction` | pass |
+| Zero-trust chain | `test_scenario_c_validation_error_passes_through_gateway` | pass |
+| Zero-trust chain | `test_scenario_d_runaway_tenant_rate_limited` | pass |
+| Zero-trust chain | `test_scenario_e_total_failure_sanitized` | pass |
+| Observability | `test_single_correlation_id_visible_in_all_hops` (headers + T1 stderr + gateway logs) | pass |
+| Robustness | `test_stdio_downstream_id_rewriting_handles_concurrent_same_ids` | pass |
+| Robustness | `test_stdio_downstream_recovers_after_child_crash` | pass |
+| Demo | `test_e2e_demo_exits_zero` (runs `python -m control_plane.e2e_demo --fast`) | pass |

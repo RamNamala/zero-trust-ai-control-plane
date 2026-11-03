@@ -44,6 +44,7 @@ from control_plane.common.logging import audit, configure_logging, get_correlati
 from control_plane.common.settings import Settings
 from control_plane.task2_mcp_gateway.auth import AuthError, Principal, authenticate
 from control_plane.task2_mcp_gateway.downstream import (
+    UPSTREAM_UNAVAILABLE,
     Downstream,
     DownstreamError,
     HttpDownstream,
@@ -63,7 +64,6 @@ _log = get_logger("task2.proxy")
 ROLE_HEADER = "X-MCP-Caller-Role"
 DECISION_HEADER = "X-MCP-Policy-Decision"
 MASK_HEADER = "x-mask-unauthorized-tools"
-UPSTREAM_UNAVAILABLE = "Upstream MCP server unavailable"
 _FORWARDED_REQUEST_HEADERS = {
     "mcp-session-id": "Mcp-Session-Id",
     "mcp-protocol-version": "MCP-Protocol-Version",

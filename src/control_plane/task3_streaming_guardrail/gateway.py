@@ -27,8 +27,8 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import aclosing, asynccontextmanager
 from typing import Any
 
 import httpx
@@ -51,7 +51,7 @@ from control_plane.common.logging import audit, configure_logging, get_logger
 from control_plane.common.settings import Settings
 from control_plane.task3_streaming_guardrail.patterns import redact
 from control_plane.task3_streaming_guardrail.redactor import StreamingPIIRedactor
-from control_plane.task3_streaming_guardrail.sse import DONE, encode_event, iter_sse
+from control_plane.task3_streaming_guardrail.sse import DONE, SSEEvent, encode_event, iter_sse
 
 _log = get_logger("task3.gateway")
 
@@ -176,48 +176,43 @@ def _upstream_headers() -> dict[str, str]:
     }
 
 
-async def _guarded_stream(
-    client: httpx.AsyncClient,
-    url: str,
-    payload: dict[str, Any],
-    max_hold: int,
-    correlation_id: str | None,
-) -> AsyncIterator[bytes]:
+async def guard_events(
+    events: AsyncIterator[SSEEvent], max_hold: int, correlation_id: str | None
+) -> AsyncGenerator[bytes, None]:
+    """The guardrail proper, independent of where the events come from: this gateway feeds it
+    from httpx, the integration app from a T4 provider's byte stream. Errors raised by
+    ``events`` (connect, status, mid-stream) become a flushed tail plus a sanitized
+    ``event: error`` frame."""
     started = time.perf_counter()
     guard = _ChoiceGuard(max_hold)
     outcome = "upstream_error"
     try:
         try:
-            async with client.stream(
-                "POST", url, json=payload, headers=_upstream_headers()
-            ) as resp:
-                if resp.status_code != 200:
-                    raise _UpstreamError(f"status_{resp.status_code}")
-                async for event in iter_sse(resp.aiter_lines()):
-                    if event.data == DONE:
-                        for frame in guard.flush_all():
-                            yield frame
-                        trailer = {
-                            "pii_redactions": guard.redactions,
-                            "forced_flushes": guard.forced_flushes,
-                            "correlation_id": correlation_id,
-                        }
-                        yield encode_event(json.dumps(trailer), event="guardrail")
-                        yield encode_event(DONE)
-                        outcome = "ok"
-                        return
-                    if event.event == "error":
-                        raise _UpstreamError("upstream_error_event")  # its text is not forwarded
-                    try:
-                        chunk = json.loads(event.data)
-                    except ValueError:
-                        _log.warning("upstream_frame_unparseable")
-                        continue
-                    if not isinstance(chunk, dict):
-                        continue
-                    for frame in guard.process(chunk):
+            async for event in events:
+                if event.data == DONE:
+                    for frame in guard.flush_all():
                         yield frame
-                raise _UpstreamError("eof_without_done")
+                    trailer = {
+                        "pii_redactions": guard.redactions,
+                        "forced_flushes": guard.forced_flushes,
+                        "correlation_id": correlation_id,
+                    }
+                    yield encode_event(json.dumps(trailer), event="guardrail")
+                    yield encode_event(DONE)
+                    outcome = "ok"
+                    return
+                if event.event == "error":
+                    raise _UpstreamError("upstream_error_event")  # its text is not forwarded
+                try:
+                    chunk = json.loads(event.data)
+                except ValueError:
+                    _log.warning("upstream_frame_unparseable")
+                    continue
+                if not isinstance(chunk, dict):
+                    continue
+                for frame in guard.process(chunk):
+                    yield frame
+            raise _UpstreamError("eof_without_done")
         except Exception as exc:
             kind = exc.kind if isinstance(exc, _UpstreamError) else type(exc).__name__
             _log.warning(
@@ -248,6 +243,43 @@ async def _guarded_stream(
         )
 
 
+async def _guarded_stream(
+    client: httpx.AsyncClient,
+    url: str,
+    payload: dict[str, Any],
+    max_hold: int,
+    correlation_id: str | None,
+) -> AsyncIterator[bytes]:
+    async def upstream_events() -> AsyncGenerator[SSEEvent, None]:
+        # The whole upstream lifetime sits in this one ``async with``: a client disconnect
+        # cancels whatever it is awaiting, and leaving the block closes the upstream response.
+        async with client.stream("POST", url, json=payload, headers=_upstream_headers()) as resp:
+            if resp.status_code != 200:
+                raise _UpstreamError(f"status_{resp.status_code}")
+            async for event in iter_sse(resp.aiter_lines()):
+                yield event
+
+    events = upstream_events()
+    try:
+        async with aclosing(guard_events(events, max_hold, correlation_id)) as frames:
+            async for frame in frames:
+                yield frame
+    finally:
+        await events.aclose()
+
+
+def redact_completion_body(body: dict[str, Any]) -> int:
+    """Redact every ``choices[].message.content`` in place; returns the redaction count."""
+    total = 0
+    choices = body.get("choices")
+    for choice in choices if isinstance(choices, list) else []:
+        message = choice.get("message") if isinstance(choice, dict) else None
+        if isinstance(message, dict) and isinstance(message.get("content"), str):
+            message["content"], n = redact(message["content"])
+            total += n
+    return total
+
+
 async def _complete(client: httpx.AsyncClient, url: str, payload: dict[str, Any]) -> JSONResponse:
     """Non-stream: the body is already complete, so redact each message once."""
     started = time.perf_counter()
@@ -265,13 +297,7 @@ async def _complete(client: httpx.AsyncClient, url: str, payload: dict[str, Any]
         )
         raise GatewayError(ErrorCode.GATEWAY_UPSTREAM_FAILURE) from None
 
-    total = 0
-    choices = body.get("choices")
-    for choice in choices if isinstance(choices, list) else []:
-        message = choice.get("message") if isinstance(choice, dict) else None
-        if isinstance(message, dict) and isinstance(message.get("content"), str):
-            message["content"], n = redact(message["content"])
-            total += n
+    total = redact_completion_body(body)
     audit(
         "guardrail_completion",
         pii_redactions=total,

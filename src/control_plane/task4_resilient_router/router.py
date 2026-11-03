@@ -446,6 +446,8 @@ async def chat_completions(request: Request, body: ChatRequest) -> Response:
             it, first, outcome = await _stream_with_failover(ctx)
             headers = {
                 **SSE_HEADERS,
+                # e.g. X-Guardrail when the integration app wraps providers in the T3 redactor
+                **getattr(state, "extra_stream_headers", {}),
                 **ctx.rate_headers(charged=ctx.reserved),  # still held until the stream ends
                 "X-Routed-Provider": outcome.provider,
                 "X-Failover-Reason": outcome.reason,
