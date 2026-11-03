@@ -8,21 +8,21 @@ add more tests freely, but don't rename these.
 
 | Criterion | Test | Status |
 |---|---|---|
-| STDIO isolation | `test_stdout_is_pure_jsonrpc_with_chaos_writers` — subprocess with `CP_T1_CHAOS_STDOUT=1`; every stdout line `json.loads` and has `jsonrpc=="2.0"` | todo |
-| STDIO isolation | `test_chaos_output_lands_on_stderr` — chaos markers appear on stderr | todo |
-| STDIO isolation | `test_sdk_client_roundtrip` — official `mcp` `stdio_client` + `ClientSession` lists tools and calls one | todo |
-| Protocol compliance | `test_initialize_and_tools_list_schemas_are_strict` — `additionalProperties: false`, pattern present | todo |
-| Protocol compliance | `test_unknown_tool_returns_32602` | todo |
-| Protocol compliance | `test_unknown_method_returns_32601` | todo |
-| Protocol compliance | `test_error_preserves_string_and_int_ids` | todo |
-| Protocol compliance | `test_business_error_is_iserror_not_protocol_error` — well-formed unknown customer | todo |
-| Validation | `test_get_customer_record_valid` | todo |
-| Validation | `test_trigger_refund_valid` (incl. integer amount `50`) | todo |
-| Validation | `test_invalid_customer_id_variants` — parametrize: `CUST-1234`, `CUST-123456`, `cust-12345`, `CUST-12345\n`, `" CUST-12345"`, `CUST-١٢٣٤٥` (Arabic-Indic digits), `12345`, `None`, `12345` (int) | todo |
-| Validation | `test_invalid_amount_variants` — `0`, `-5`, `"50"`, `true`, `NaN`/`inf` (if transportable), `10.999`, `> 10000` | todo |
-| Validation | `test_invalid_reason_variants` — `"short"`, `"         x"` (stripped < 10), missing | todo |
-| Validation | `test_extra_fields_rejected` | todo |
-| Validation | `test_validation_error_data_does_not_echo_input` | todo |
+| STDIO isolation | `test_stdout_is_pure_jsonrpc_with_chaos_writers` — subprocess with `CP_T1_CHAOS_STDOUT=1`; every stdout line `json.loads` and has `jsonrpc=="2.0"` | pass |
+| STDIO isolation | `test_chaos_output_lands_on_stderr` — chaos markers appear on stderr | pass |
+| STDIO isolation | `test_sdk_client_roundtrip` — official `mcp` `stdio_client` + `ClientSession` lists tools and calls one | pass |
+| Protocol compliance | `test_initialize_and_tools_list_schemas_are_strict` — `additionalProperties: false`, pattern present | pass |
+| Protocol compliance | `test_unknown_tool_returns_32602` | pass |
+| Protocol compliance | `test_unknown_method_returns_32601` | pass |
+| Protocol compliance | `test_error_preserves_string_and_int_ids` | pass |
+| Protocol compliance | `test_business_error_is_iserror_not_protocol_error` — well-formed unknown customer | pass |
+| Validation | `test_get_customer_record_valid` | pass |
+| Validation | `test_trigger_refund_valid` (incl. integer amount `50`) | pass |
+| Validation | `test_invalid_customer_id_variants` — parametrize: `CUST-1234`, `CUST-123456`, `cust-12345`, `CUST-12345\n`, `" CUST-12345"`, `CUST-١٢٣٤٥` (Arabic-Indic digits), `12345`, `None`, `12345` (int) | pass |
+| Validation | `test_invalid_amount_variants` — `0`, `-5`, `"50"`, `true`, `NaN`/`inf` (if transportable), `10.999`, `> 10000` | pass |
+| Validation | `test_invalid_reason_variants` — `"short"`, `"         x"` (stripped < 10), missing | pass |
+| Validation | `test_extra_fields_rejected` | pass |
+| Validation | `test_validation_error_data_does_not_echo_input` | pass |
 
 ## Task 2 — MCP gateway (`tests/test_task2_mcp_gateway.py`)
 

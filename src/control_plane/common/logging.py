@@ -74,6 +74,35 @@ def configure_logging(level: str | int = "INFO", logger_name: str = ROOT_LOGGER)
     logger.propagate = False
 
 
+class FirstLineOnlyFilter(logging.Filter):
+    """Third-party libraries log whatever they like; mcp 1.x, for example, warns with a full
+    pydantic error dump including ``input_value`` (i.e. raw, possibly PII-laden arguments).
+    We keep the first line, which names the problem, and drop the rest plus any traceback."""
+
+    max_chars = 200
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        lines = record.getMessage().splitlines() or [""]
+        record.msg = lines[0][: self.max_chars]
+        record.args = None
+        record.exc_info = None
+        record.exc_text = None
+        return True
+
+
+def configure_root_logging(level: str | int = "WARNING") -> None:
+    """Route the root logger (third-party libraries) through the same JSON-to-stderr handler,
+    sanitized. Without a root handler, the first bare ``logging.warning()`` anywhere calls
+    ``basicConfig`` implicitly and emits unformatted, unsanitized text."""
+    root = logging.getLogger()
+    root.setLevel(level)
+    if not any(isinstance(h, StderrHandler) for h in root.handlers):
+        handler = StderrHandler()
+        handler.setFormatter(JsonFormatter())
+        handler.addFilter(FirstLineOnlyFilter())
+        root.addHandler(handler)
+
+
 def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name if name.startswith(ROOT_LOGGER) else f"{ROOT_LOGGER}.{name}")
 
