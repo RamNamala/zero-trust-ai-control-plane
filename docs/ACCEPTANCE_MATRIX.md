@@ -28,26 +28,26 @@ add more tests freely, but don't rename these.
 
 | Criterion | Test | Status |
 |---|---|---|
-| JSON-RPC parsing | `test_tools_list_proxied_for_viewer_and_admin` | todo |
-| JSON-RPC parsing | `test_id_type_preserved` — parametrize `"abc"`, `7`, `null` | todo |
-| JSON-RPC parsing | `test_parse_error_returns_32700_null_id` | todo |
-| JSON-RPC parsing | `test_invalid_request_shapes_return_32600` — non-object, missing method, wrong jsonrpc, empty batch `[]` | todo |
-| JSON-RPC parsing | `test_notification_returns_202_empty_body` | todo |
-| JSON-RPC parsing | `test_batch_mixed_allow_deny_preserves_order` — downstream gets only allowed subset | todo |
-| JSON-RPC parsing | `test_batch_of_only_notifications_returns_202` | todo |
-| Proxy forwarding | `test_authorization_header_not_passed_downstream` | todo |
-| Proxy forwarding | `test_correlation_id_propagated_downstream_and_echoed` | todo |
-| Proxy forwarding | `test_downstream_unavailable_returns_sanitized_32603` | todo |
-| Authorization | `test_viewer_can_call_get_customer_record` | todo |
-| Authorization | `test_viewer_admin_tool_blocked_32001_exact_message` | todo |
-| Authorization | `test_blocked_call_never_reaches_downstream` — counter unchanged | todo |
-| Authorization | `test_admin_can_call_admin_reset_key` | todo |
-| Authorization | `test_tool_name_smuggling_rejected` — `"Admin_reset_key"` (blocked as admin_), `" admin_reset_key"`, zero-width char → -32602 | todo |
-| Authorization | `test_missing_or_malformed_bearer_401` | todo |
-| Authorization | `test_jwt_expired_and_clock_skew_leeway` | todo |
-| Authorization | `test_insecure_dev_tokens_disabled_by_default` | todo |
-| Defense in depth | `test_mask_admin_tools_for_viewer_when_header_set` | todo |
-| Diagnostics | `test_caller_role_and_policy_headers` | todo |
+| JSON-RPC parsing | `test_tools_list_proxied_for_viewer_and_admin` | pass |
+| JSON-RPC parsing | `test_id_type_preserved` — parametrize `"abc"`, `7`, `null` | pass |
+| JSON-RPC parsing | `test_parse_error_returns_32700_null_id` | pass |
+| JSON-RPC parsing | `test_invalid_request_shapes_return_32600` — non-object, missing method, wrong jsonrpc, empty batch `[]` | pass |
+| JSON-RPC parsing | `test_notification_returns_202_empty_body` | pass |
+| JSON-RPC parsing | `test_batch_mixed_allow_deny_preserves_order` — downstream gets only allowed subset | pass |
+| JSON-RPC parsing | `test_batch_of_only_notifications_returns_202` | pass |
+| Proxy forwarding | `test_authorization_header_not_passed_downstream` | pass |
+| Proxy forwarding | `test_correlation_id_propagated_downstream_and_echoed` | pass |
+| Proxy forwarding | `test_downstream_unavailable_returns_sanitized_32603` | pass |
+| Authorization | `test_viewer_can_call_get_customer_record` | pass |
+| Authorization | `test_viewer_admin_tool_blocked_32001_exact_message` | pass |
+| Authorization | `test_blocked_call_never_reaches_downstream` — counter unchanged | pass |
+| Authorization | `test_admin_can_call_admin_reset_key` | pass |
+| Authorization | `test_tool_name_smuggling_rejected` — `"Admin_reset_key"` (blocked as admin_), `" admin_reset_key"`, zero-width char → -32602 | pass |
+| Authorization | `test_missing_or_malformed_bearer_401` | pass |
+| Authorization | `test_jwt_expired_and_clock_skew_leeway` | pass |
+| Authorization | `test_insecure_dev_tokens_disabled_by_default` | pass |
+| Defense in depth | `test_mask_admin_tools_for_viewer_when_header_set` | pass |
+| Diagnostics | `test_caller_role_and_policy_headers` | pass |
 
 ## Task 3 — Streaming guardrail (`tests/test_task3_guardrail.py`)
 
