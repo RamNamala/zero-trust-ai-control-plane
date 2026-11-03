@@ -73,28 +73,28 @@ add more tests freely, but don't rename these.
 
 | Criterion | Test | Status |
 |---|---|---|
-| Rate-limit state | `test_wal_mode_and_pragmas_enabled` | todo |
-| Rate-limit state | `test_limit_enforced_at_50000` | todo |
-| Rate-limit state | `test_concurrent_gather_cannot_overdraft` — 100 × 1,000-token reservations via `asyncio.gather` → exactly 50 succeed | todo |
-| Rate-limit state | `test_multiprocess_cannot_overdraft` — 4 processes, separate connections, same DB file | todo |
-| Rate-limit state | `test_sliding_window_expiry_restores_quota` (injected clock) | todo |
-| Rate-limit state | `test_partial_expiry_is_sliding_not_fixed` | todo |
-| Rate-limit state | `test_retry_after_ms_is_accurate` | todo |
-| Rate-limit state | `test_request_larger_than_limit_is_413_not_429` | todo |
-| Token tracking | `test_reconcile_refunds_unused_reservation` | todo |
-| Token tracking | `test_release_on_total_failure_does_not_charge_tenant` | todo |
-| Token tracking | `test_tenant_isolation` | todo |
-| Token tracking | `test_raw_tenant_key_not_stored` | todo |
-| Timeout races | `test_failover_on_primary_timeout_3200ms` (`X-Failover-Reason: timeout_3000ms`) | todo |
-| Timeout races | `test_timed_out_primary_task_is_cancelled` — mock `cancelled` flag set | todo |
-| Timeout races | `test_primary_2900ms_is_not_failed_over` | todo |
-| Fallback | `test_failover_on_429` | todo |
-| Fallback | `test_failover_on_5xx` | todo |
-| Fallback | `test_no_failover_on_400_client_error` | todo |
-| Fallback | `test_diagnostic_headers_present` | todo |
-| Sanitization | `test_both_fail_returns_envelope_without_leaks` — no `Traceback`, `/srv/`, `SELECT`, `10.0.0.7`, `sk-live` | todo |
-| Sanitization | `test_unhandled_exception_handler_sanitizes` | todo |
-| Sanitization | `test_rate_limited_envelope_and_retry_after_header` | todo |
+| Rate-limit state | `test_wal_mode_and_pragmas_enabled` | pass |
+| Rate-limit state | `test_limit_enforced_at_50000` | pass |
+| Rate-limit state | `test_concurrent_gather_cannot_overdraft` — 100 × 1,000-token reservations via `asyncio.gather` → exactly 50 succeed | pass |
+| Rate-limit state | `test_multiprocess_cannot_overdraft` — 4 processes, separate connections, same DB file | pass |
+| Rate-limit state | `test_sliding_window_expiry_restores_quota` (injected clock) | pass |
+| Rate-limit state | `test_partial_expiry_is_sliding_not_fixed` | pass |
+| Rate-limit state | `test_retry_after_ms_is_accurate` | pass |
+| Rate-limit state | `test_request_larger_than_limit_is_413_not_429` | pass |
+| Token tracking | `test_reconcile_refunds_unused_reservation` | pass |
+| Token tracking | `test_release_on_total_failure_does_not_charge_tenant` | pass |
+| Token tracking | `test_tenant_isolation` | pass |
+| Token tracking | `test_raw_tenant_key_not_stored` | pass |
+| Timeout races | `test_failover_on_primary_timeout_3200ms` (`X-Failover-Reason: timeout_3000ms`) | pass |
+| Timeout races | `test_timed_out_primary_task_is_cancelled` — mock `cancelled` flag set | pass |
+| Timeout races | `test_primary_2900ms_is_not_failed_over` | pass |
+| Fallback | `test_failover_on_429` | pass |
+| Fallback | `test_failover_on_5xx` | pass |
+| Fallback | `test_no_failover_on_400_client_error` | pass |
+| Fallback | `test_diagnostic_headers_present` | pass |
+| Sanitization | `test_both_fail_returns_envelope_without_leaks` — no `Traceback`, `/srv/`, `SELECT`, `10.0.0.7`, `sk-live` | pass |
+| Sanitization | `test_unhandled_exception_handler_sanitizes` | pass |
+| Sanitization | `test_rate_limited_envelope_and_retry_after_header` | pass |
 
 ## Integration (`tests/test_e2e_integration.py`)
 

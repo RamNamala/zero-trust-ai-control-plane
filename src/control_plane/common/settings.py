@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     rate_limit_db_path: Path = Path("./data/gateway_ratelimit.db")
     primary_timeout_seconds: float = Field(default=3.0, gt=0)
     request_deadline_seconds: float = Field(default=15.0, gt=0)
+    primary_provider_url: str = "http://127.0.0.1:8301/v1/chat/completions"
+    backup_provider_url: str = "http://127.0.0.1:8302/v1/chat/completions"
+    circuit_breaker_enabled: bool = False
+    circuit_breaker_threshold: int = Field(default=5, gt=0)
+    circuit_breaker_cooldown_seconds: float = Field(default=30.0, gt=0)
 
     # Task 3 - streaming guardrail
     redactor_max_hold_chars: int = Field(default=256, gt=0)
