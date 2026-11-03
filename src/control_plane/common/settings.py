@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     # Task 3 - streaming guardrail
     redactor_max_hold_chars: int = Field(default=256, gt=0)
+    llm_upstream_url: str = "http://127.0.0.1:8201/v1/chat/completions"
 
     # Task 2 - MCP gateway
     mcp_downstream_url: str = "http://127.0.0.1:8101/mcp"

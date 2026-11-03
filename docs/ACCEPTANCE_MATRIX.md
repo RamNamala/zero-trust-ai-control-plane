@@ -53,21 +53,21 @@ add more tests freely, but don't rename these.
 
 | Criterion | Test | Status |
 |---|---|---|
-| Regex over partial streams | `test_ssn_split_across_three_chunks` | todo |
-| Regex over partial streams | `test_email_split_across_three_chunks` | todo |
-| Regex over partial streams | `test_credit_card_split_across_three_chunks` (dashed and spaced) | todo |
-| Regex over partial streams | `test_chunking_invariance_property` (Hypothesis) | todo |
-| Regex over partial streams | `test_non_luhn_digit_runs_not_redacted` — order numbers, phone-like runs | todo |
-| Buffer state mgmt | `test_flush_emits_tail_and_resets` | todo |
-| Buffer state mgmt | `test_finish_reason_frame_flushes_before_forwarding` | todo |
-| Buffer state mgmt | `test_multi_choice_streams_have_independent_buffers` | todo |
-| Memory efficiency | `test_peak_buffer_bounded_over_10k_chunks` — `peak_buffer_chars <= max_hold + max_chunk_len` | todo |
-| Memory efficiency | `test_gateway_never_reads_full_upstream_body` (mock asserts streaming consumption) | todo |
-| Low latency | `test_first_safe_chunk_yielded_before_stream_ends` — first content < 200 ms while upstream pauses 1 s | todo |
-| Low latency | `test_sse_headers_disable_proxy_buffering` | todo |
-| Robustness | `test_client_disconnect_closes_upstream` | todo |
-| Robustness | `test_upstream_error_midstream_emits_sanitized_error_frame` | todo |
-| Diagnostics | `test_guardrail_trailer_reports_redaction_count` | todo |
+| Regex over partial streams | `test_ssn_split_across_three_chunks` | pass |
+| Regex over partial streams | `test_email_split_across_three_chunks` | pass |
+| Regex over partial streams | `test_credit_card_split_across_three_chunks` (dashed and spaced) | pass |
+| Regex over partial streams | `test_chunking_invariance_property` (Hypothesis) | pass |
+| Regex over partial streams | `test_non_luhn_digit_runs_not_redacted` — order numbers, phone-like runs | pass |
+| Buffer state mgmt | `test_flush_emits_tail_and_resets` | pass |
+| Buffer state mgmt | `test_finish_reason_frame_flushes_before_forwarding` | pass |
+| Buffer state mgmt | `test_multi_choice_streams_have_independent_buffers` | pass |
+| Memory efficiency | `test_peak_buffer_bounded_over_10k_chunks` — `peak_buffer_chars <= max_hold + max_chunk_len` | pass |
+| Memory efficiency | `test_gateway_never_reads_full_upstream_body` (mock asserts streaming consumption) | pass |
+| Low latency | `test_first_safe_chunk_yielded_before_stream_ends` — first content < 200 ms while upstream pauses 1 s | pass |
+| Low latency | `test_sse_headers_disable_proxy_buffering` | pass |
+| Robustness | `test_client_disconnect_closes_upstream` | pass |
+| Robustness | `test_upstream_error_midstream_emits_sanitized_error_frame` | pass |
+| Diagnostics | `test_guardrail_trailer_reports_redaction_count` | pass |
 
 ## Task 4 — Router (`tests/test_task4_router.py`)
 
