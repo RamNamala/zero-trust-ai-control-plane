@@ -147,7 +147,8 @@ failover logic intact (see [DESIGN_NOTES](DESIGN_NOTES.md#streaming-failover-onl
 - **Asked:** redact emails, SSNs and card numbers from a streamed LLM response in real time,
   without buffering the response, and with low TTFT.
 - **How it's met:**
-  - One `StreamingPIIRedactor` per choice.
+  - One `StreamingPIIRedactor` per choice and per text field (`content`, `refusal`, each tool
+    call's `arguments`); `logprobs` is dropped.
   - Each chunk emits everything up to the start of the trailing text that *could still become*
     PII, and holds back only that tail (bounded by `max_hold`, 256 chars).
   - Cards need Luhn plus 13–19 digits. SSN-shaped strings are redacted even in "invalid"
@@ -346,5 +347,5 @@ These are this machine's numbers, not claims about production hardware.
 | `ceil(chars/4)` token estimate | The provider's tokenizer (tiktoken etc.), while still reconciling to the provider's reported `usage`. |
 | Correlation ID in JSON logs | OpenTelemetry traces (W3C `traceparent`), with the MCP `_meta` slot carrying trace context into tool servers. |
 | One T1 child per gateway process | A pool of downstream sessions, health checks and backpressure; per-tenant MCP sessions if tools hold state. |
-| Regex PII detection (email, SSN, card) | A pluggable detector (e.g. Presidio, cloud DLP) for names, addresses and phone numbers, with per-tenant policies. Regexes stay as the fast first pass. |
+| Regex PII detection (email, SSN, card) | A pluggable detector (e.g. Presidio, cloud DLP) for names, addresses and phone numbers, with per-tenant policies, and Unicode normalization (fullwidth digits, zero-width characters) before matching. Regexes stay as the fast first pass. |
 | Mock providers and mock MCP downstream | Real providers behind the same `Provider` protocol (`HttpProvider` is there and tested). |

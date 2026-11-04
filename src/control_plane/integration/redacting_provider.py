@@ -14,45 +14,24 @@ frame, which is the only honest option once headers are on the wire.
 
 from __future__ import annotations
 
-import codecs
 import time
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import aclosing
 
 from control_plane.common.logging import audit, get_correlation_id
 from control_plane.task3_streaming_guardrail.gateway import guard_events, redact_completion_body
-from control_plane.task3_streaming_guardrail.sse import iter_sse
+from control_plane.task3_streaming_guardrail.sse import iter_lines, iter_sse
 from control_plane.task4_resilient_router.providers import (
     ChatRequest,
     CompletionResult,
     Provider,
 )
 
-MAX_LINE_CHARS = 1 << 20
 
-
-class _FrameTooLarge(Exception):
-    pass
-
-
-async def _lines(first: bytes, rest: AsyncIterator[bytes]) -> AsyncIterator[str]:
-    """Bytes -> text lines, holding at most one partial line (and a split UTF-8 sequence)."""
-    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-    partial = decoder.decode(first)
-    while True:
-        *lines, partial = partial.split("\n")
-        for line in lines:
-            yield line
-        if len(partial) > MAX_LINE_CHARS:
-            raise _FrameTooLarge
-        try:
-            chunk = await anext(rest)
-        except StopAsyncIteration:
-            break
-        partial += decoder.decode(chunk)
-    partial += decoder.decode(b"", final=True)
-    if partial:
-        yield partial
+async def _prepend(first: bytes, rest: AsyncIterator[bytes]) -> AsyncIterator[bytes]:
+    yield first
+    async for chunk in rest:
+        yield chunk
 
 
 class RedactingProvider:
@@ -82,7 +61,7 @@ class RedactingProvider:
                 first = await anext(source)
             except StopAsyncIteration:
                 return  # empty stream: the router reports "no first byte" itself
-            events = iter_sse(_lines(first, source))
+            events = iter_sse(iter_lines(_prepend(first, source)))
             frames = guard_events(events, self.max_hold, get_correlation_id())
             async with aclosing(frames):
                 async for frame in frames:

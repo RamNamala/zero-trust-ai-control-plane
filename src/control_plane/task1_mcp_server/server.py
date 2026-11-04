@@ -190,6 +190,38 @@ def _method_not_found(request_id: types.RequestId) -> SessionMessage:
     return SessionMessage(message=types.JSONRPCMessage(error))
 
 
+class _NullIdError(types.JSONRPCMessage):
+    """An error response with ``id: null``. mcp 1.x types can't express it (``JSONRPCError.id``
+    is ``str | int``) and the stdio writer dumps with ``exclude_none=True``, which would drop
+    the id entirely, so this message serializes itself."""
+
+    def model_dump_json(self, **_: Any) -> str:
+        error = self.root.error  # type: ignore[union-attr]
+        return json.dumps(
+            {"jsonrpc": "2.0", "id": None, "error": {"code": error.code, "message": error.message}}
+        )
+
+
+def _unparseable(exc: Exception) -> SessionMessage:
+    """The SDK's stdio reader hands over a ``ValidationError`` for a line it couldn't turn into
+    a message, and the server would answer it with a ``notifications/message`` log rather than
+    a response, leaving the caller waiting (PITFALLS #50). JSON-RPC 2.0 owes an error with
+    ``id: null``: -32700 for text that isn't JSON (incl. invalid UTF-8 and lone surrogates),
+    -32600 for JSON that isn't a request."""
+    not_json = not isinstance(exc, ValidationError) or any(
+        err["type"] == "json_invalid" for err in exc.errors(include_url=False, include_input=False)
+    )
+    code = ErrorCode.PARSE_ERROR if not_json else ErrorCode.INVALID_REQUEST
+    error = types.JSONRPCError.model_construct(
+        jsonrpc="2.0",
+        id=None,
+        error=types.ErrorData(
+            code=int(code), message="Parse error" if not_json else "Invalid Request"
+        ),
+    )
+    return SessionMessage(message=_NullIdError.model_construct(root=error))
+
+
 async def _relay_known_methods(
     source: MemoryObjectReceiveStream[SessionMessage | Exception],
     sink: MemoryObjectSendStream[SessionMessage | Exception],
@@ -197,6 +229,10 @@ async def _relay_known_methods(
 ) -> None:
     async with sink:
         async for message in source:
+            if isinstance(message, Exception):
+                log_event(_log, "unparseable_frame", logging.WARNING, kind=type(message).__name__)
+                await responses.send(_unparseable(message))
+                continue
             if isinstance(message, SessionMessage):
                 root = message.message.root
                 if (

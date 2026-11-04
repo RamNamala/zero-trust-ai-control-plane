@@ -19,7 +19,6 @@ Run standalone: ``python -m control_plane.task2_mcp_gateway.proxy`` (port 8100).
 
 from __future__ import annotations
 
-import json
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -37,6 +36,7 @@ from control_plane.common.jsonrpc import (
     JsonRpcId,
     is_notification,
     is_valid_id,
+    loads_strict,
     make_error,
     request_shape_error,
 )
@@ -108,7 +108,7 @@ async def _read_limited(request: Request, limit: int) -> bytes | None:
 
 def _id_if_single(body: bytes) -> JsonRpcId:
     try:
-        payload = json.loads(body)
+        payload = loads_strict(body)
     except ValueError:
         return None
     if isinstance(payload, dict):
@@ -157,7 +157,9 @@ def _classify(msg: Any, principal: Principal, started: float) -> _Slot:
         verdict = "allow" if decision.allow else "deny"
         _audit_decision(principal, method, tool_name, verdict, decision.reason, started)
     if not decision.allow:
-        if decision.error_code == ErrorCode.INVALID_PARAMS:
+        if decision.error_code == ErrorCode.METHOD_NOT_FOUND:
+            slot.reject(make_error(id_, ErrorCode.METHOD_NOT_FOUND))
+        elif decision.error_code == ErrorCode.INVALID_PARAMS:
             message = f"Invalid params: tool name must match ^{TOOL_NAME_RE.pattern}$"
             slot.reject(make_error(id_, ErrorCode.INVALID_PARAMS, message))
         else:
@@ -312,7 +314,11 @@ async def handle_mcp(request: Request) -> Response:
         )
 
     try:
-        principal = authenticate(request.headers.get("authorization"), settings)
+        credentials = request.headers.getlist("authorization")
+        if len(credentials) > 1:
+            # A front proxy may honour the last header while we'd honour the first.
+            raise AuthError("duplicate_header")
+        principal = authenticate(credentials[0] if credentials else None, settings)
     except AuthError as exc:
         audit("mcp_auth_failed", reason=exc.reason, latency_ms=_elapsed_ms(started))
         return JSONResponse(
@@ -322,8 +328,8 @@ async def handle_mcp(request: Request) -> Response:
         )
 
     try:
-        payload = json.loads(body)
-    except ValueError:  # JSONDecodeError and invalid UTF-8
+        payload = loads_strict(body)
+    except ValueError:  # JSONDecodeError, invalid UTF-8, NaN/Infinity, too deeply nested
         return _json_rpc_response(make_error(None, ErrorCode.PARSE_ERROR), principal, "deny")
 
     if isinstance(payload, dict):
@@ -332,6 +338,13 @@ async def handle_mcp(request: Request) -> Response:
         messages, is_batch = payload, True
     else:  # scalars and the empty batch get one error object, not an array
         return _json_rpc_response(make_error(None, ErrorCode.INVALID_REQUEST), principal, "deny")
+
+    if len(messages) > settings.mcp_max_batch_messages:
+        # One POST must not fan out into an unbounded number of downstream tool executions.
+        audit("mcp_batch_too_large", role=principal.role, messages=len(messages))
+        return _json_rpc_response(
+            make_error(None, ErrorCode.INVALID_REQUEST, "Batch too large"), principal, "deny"
+        )
 
     slots = [_classify(m, principal, started) for m in messages]
     session_id = await _forward(

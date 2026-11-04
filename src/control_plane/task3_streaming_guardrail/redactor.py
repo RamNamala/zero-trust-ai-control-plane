@@ -25,7 +25,12 @@ token, and the counter makes the loss visible in the audit log instead of silent
 
 from __future__ import annotations
 
-from control_plane.task3_streaming_guardrail.patterns import EMAIL_TAIL, NUM_TAIL, redact
+from control_plane.task3_streaming_guardrail.patterns import (
+    EMAIL_TAIL,
+    NUM_TAIL,
+    PII_PATTERNS,
+    redact,
+)
 
 DEFAULT_MAX_HOLD = 256
 
@@ -58,8 +63,22 @@ class StreamingPIIRedactor:
                 break
             cut = new
         if len(self._buf) - cut > self.max_hold:
-            cut = len(self._buf) - self.max_hold
+            cut = self._extend_past_matches(len(self._buf) - self.max_hold)
             self.forced_flushes += 1
+        return cut
+
+    def _extend_past_matches(self, cut: int) -> int:
+        """A forced cut must not land inside a PII match already present in the buffer:
+        emitting its first half now would leak it piece by piece as small chunks arrive
+        (PITFALLS #49). Moving the cut to the match's end emits it whole, as ``[REDACTED]``.
+        This only ever emits *more*, so memory stays bounded."""
+        moved = True
+        while moved:
+            moved = False
+            for rx in PII_PATTERNS:
+                for m in rx.finditer(self._buf):
+                    if m.start() < cut < m.end():
+                        cut, moved = m.end(), True
         return cut
 
     def feed(self, delta: str) -> str:

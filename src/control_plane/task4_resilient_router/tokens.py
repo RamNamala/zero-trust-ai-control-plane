@@ -33,12 +33,15 @@ _tiktoken_count = _load_tiktoken()
 
 
 def _message_text(message: dict[str, Any]) -> str:
-    content = message.get("content")
-    if isinstance(content, str):
-        return content
-    if content is None:
-        return ""
-    return json.dumps(content, ensure_ascii=False)  # multi-part / tool content
+    """Every field the model will read, not just ``content``: tool-call arguments, ``name``
+    and multi-part content are prompt tokens too, and leaving them out would let a caller
+    reserve almost nothing for a huge prompt."""
+    parts: list[str] = []
+    for key, value in message.items():
+        if key == "role" or value is None:
+            continue
+        parts.append(value if isinstance(value, str) else json.dumps(value, ensure_ascii=False))
+    return "".join(parts)
 
 
 def estimate_prompt_tokens(

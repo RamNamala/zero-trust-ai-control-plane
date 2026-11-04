@@ -24,6 +24,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from control_plane.common.body_limit import BodySizeLimitMiddleware
 from control_plane.common.correlation import CorrelationIdMiddleware
 from control_plane.common.errors import install_exception_handlers
 from control_plane.common.logging import configure_logging, configure_root_logging
@@ -88,6 +89,12 @@ def create_app(
     )
     app.state.extra_stream_headers = {GUARDRAIL_HEADER: GUARDRAIL_VERSION}
     app.state.downstream = downstream or StdioMcpDownstream()
+    # /mcp enforces the same limit itself, answering in JSON-RPC shape.
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=resolved.max_request_body_bytes,
+        exclude_paths=("/mcp",),
+    )
     app.add_middleware(CorrelationIdMiddleware)
     install_exception_handlers(app)
     app.add_api_route("/v1/chat/completions", chat_completions, methods=["POST"])

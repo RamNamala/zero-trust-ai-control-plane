@@ -4,7 +4,8 @@ Tool names are validated before classification. A strict ASCII ``fullmatch`` blo
 smuggling tricks a prefix check alone misses: a leading space (``" admin_reset_key"``), a
 zero-width character, Unicode look-alikes, or a trailing newline (Python's ``$`` would accept it).
 The ``admin_`` check is case-insensitive so ``Admin_reset_key`` can't slip past a downstream that
-treats names case-insensitively. Unknown roles get nothing (default deny).
+treats names case-insensitively. Unknown roles and methods outside the MCP spec get nothing
+(default deny).
 """
 
 from __future__ import annotations
@@ -17,6 +18,31 @@ from control_plane.common.jsonrpc import ErrorCode
 
 TOOL_NAME_RE = re.compile(r"[A-Za-z0-9_.-]{1,128}")
 ADMIN_PREFIX = "admin_"
+
+# Client -> server methods of MCP 2025-06-18, exactly as spelled. Anything else is answered
+# locally with -32601, never forwarded: a downstream that normalizes "TOOLS/CALL" or
+# "tools/call " would otherwise run a tool the RBAC check never saw.
+MCP_CLIENT_METHODS: frozenset[str] = frozenset(
+    {
+        "initialize",
+        "ping",
+        "tools/list",
+        "tools/call",
+        "resources/list",
+        "resources/templates/list",
+        "resources/read",
+        "resources/subscribe",
+        "resources/unsubscribe",
+        "prompts/list",
+        "prompts/get",
+        "completion/complete",
+        "logging/setLevel",
+        "notifications/initialized",
+        "notifications/cancelled",
+        "notifications/progress",
+        "notifications/roots/list_changed",
+    }
+)
 
 
 class ToolClass(StrEnum):
@@ -57,6 +83,8 @@ def decide(role: str, method: str, tool_name: str | None = None) -> Decision:
     grants = ROLE_GRANTS.get(role)
     if grants is None:
         return Decision(False, "unknown_role", ErrorCode.UNAUTHORIZED_TOOL_CALL)
+    if method not in MCP_CLIENT_METHODS:
+        return Decision(False, "unknown_method", ErrorCode.METHOD_NOT_FOUND)
     if method != "tools/call":
         return Decision(True, "non_tool_method")
     if tool_name is None or not is_valid_tool_name(tool_name):

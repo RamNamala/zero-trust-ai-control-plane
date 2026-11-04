@@ -36,6 +36,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
+from control_plane.common.body_limit import BodySizeLimitMiddleware
 from control_plane.common.correlation import (
     CorrelationIdMiddleware,
     correlation_id_from_scope,
@@ -51,7 +52,13 @@ from control_plane.common.logging import audit, configure_logging, get_logger
 from control_plane.common.settings import Settings
 from control_plane.task3_streaming_guardrail.patterns import redact
 from control_plane.task3_streaming_guardrail.redactor import StreamingPIIRedactor
-from control_plane.task3_streaming_guardrail.sse import DONE, SSEEvent, encode_event, iter_sse
+from control_plane.task3_streaming_guardrail.sse import (
+    DONE,
+    SSEEvent,
+    encode_event,
+    iter_lines,
+    iter_sse,
+)
 
 _log = get_logger("task3.gateway")
 
@@ -84,20 +91,39 @@ class _UpstreamError(Exception):
         super().__init__(kind)
 
 
+# Free-text delta fields a model can put PII in. ``tool_calls[].function.arguments`` is
+# handled separately because it is nested and keyed by the tool call's own index.
+_TEXT_FIELDS = ("content", "refusal")
+
+# (choice index, field) or (choice index, "tool_calls", tool call index)
+_StreamKey = tuple[int, str] | tuple[int, str, int]
+
+
+def _tool_index(tool_call: dict[str, Any]) -> int:
+    raw = tool_call.get("index", 0)
+    return raw if isinstance(raw, int) and not isinstance(raw, bool) else 0
+
+
 class _ChoiceGuard:
-    """Per-stream state: one redactor per choice index, so ``n > 1`` completions can't share a
-    tail and leak a match across choices."""
+    """Per-stream state: one redactor per choice *and* per text field, so ``n > 1``
+    completions, ``content`` vs ``refusal``, and parallel tool calls can't share a tail and
+    leak a match across each other.
+
+    Every model-written string is guarded, not just ``content``: tool-call arguments are
+    streamed text too, and an agent told to "put the SSN in the arguments" would otherwise
+    walk straight past the guardrail. ``logprobs`` is dropped: its tokens repeat the response
+    text split at token boundaries, so it can't be redacted reliably."""
 
     def __init__(self, max_hold: int) -> None:
         self.max_hold = max_hold
-        self.redactors: dict[int, StreamingPIIRedactor] = {}
+        self.redactors: dict[_StreamKey, StreamingPIIRedactor] = {}
         self.template: dict[str, Any] = {}
         self.frames_out = 0
 
-    def _redactor(self, index: int) -> StreamingPIIRedactor:
-        if index not in self.redactors:
-            self.redactors[index] = StreamingPIIRedactor(self.max_hold)
-        return self.redactors[index]
+    def _redactor(self, key: _StreamKey) -> StreamingPIIRedactor:
+        if key not in self.redactors:
+            self.redactors[key] = StreamingPIIRedactor(self.max_hold)
+        return self.redactors[key]
 
     @property
     def redactions(self) -> int:
@@ -111,13 +137,89 @@ class _ChoiceGuard:
     def peak_buffer_chars(self) -> int:
         return max((r.peak_buffer_chars for r in self.redactors.values()), default=0)
 
+    @property
+    def choices(self) -> int:
+        return len({key[0] for key in self.redactors})
+
     def _encode(self, chunk: dict[str, Any]) -> bytes:
         self.frames_out += 1
         return encode_event(json.dumps(chunk, ensure_ascii=False))
 
-    def _content_frame(self, index: int, content: str) -> bytes:
-        choice = {"index": index, "delta": {"content": content}, "finish_reason": None}
+    def _delta_frame(self, index: int, delta: dict[str, Any]) -> bytes:
+        choice = {"index": index, "delta": delta, "finish_reason": None}
         return self._encode({**self.template, "choices": [choice]})
+
+    def _guard_delta(self, index: int, delta: dict[str, Any]) -> bool:
+        """Redact ``delta`` in place and drop fields left empty (their text is held back).
+        Returns True if anything was dropped."""
+        dropped = False
+        for field in _TEXT_FIELDS:
+            if isinstance(delta.get(field), str):
+                delta[field] = self._redactor((index, field)).feed(delta[field])
+                if delta[field] == "":
+                    del delta[field]
+                    dropped = True
+        tool_calls = delta.get("tool_calls")
+        if isinstance(tool_calls, list):
+            kept_calls: list[Any] = []
+            for tool_call in tool_calls:
+                kept_call = self._guard_tool_call(index, tool_call)
+                if kept_call is None:
+                    dropped = True
+                else:
+                    kept_calls.append(kept_call)
+            if kept_calls:
+                delta["tool_calls"] = kept_calls
+            else:
+                del delta["tool_calls"]
+        return dropped
+
+    def _guard_tool_call(self, index: int, tool_call: Any) -> Any:
+        if not isinstance(tool_call, dict):
+            return tool_call
+        function = tool_call.get("function")
+        if not isinstance(function, dict) or not isinstance(function.get("arguments"), str):
+            return tool_call
+        key = (index, "tool_calls", _tool_index(tool_call))
+        safe = self._redactor(key).feed(function["arguments"])
+        new_function = {**function, "arguments": safe}
+        if safe == "":
+            del new_function["arguments"]
+        rest = {k: v for k, v in tool_call.items() if k not in ("index", "function")}
+        if not rest and not new_function:
+            return None  # only held-back arguments: nothing to say for this call yet
+        return {**tool_call, "function": new_function}
+
+    def _flush_choice(self, index: int) -> dict[str, Any]:
+        """Everything held back for one choice, as one delta (empty if nothing was)."""
+        delta: dict[str, Any] = {}
+        calls: list[dict[str, Any]] = []
+        for key, redactor in sorted(self.redactors.items()):
+            if key[0] != index:
+                continue
+            tail = redactor.flush()
+            if not tail:
+                continue
+            if len(key) == 3:
+                calls.append({"index": key[2], "function": {"arguments": tail}})
+            else:
+                delta[key[1]] = tail
+        if calls:
+            delta["tool_calls"] = calls
+        return delta
+
+    @staticmethod
+    def _merge(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:
+        """Join two deltas of one choice in emission order (text fields concatenate)."""
+        merged = dict(first)
+        for field, value in second.items():
+            if field in _TEXT_FIELDS and isinstance(merged.get(field), str):
+                merged[field] = merged[field] + value
+            elif field == "tool_calls" and isinstance(merged.get(field), list):
+                merged[field] = [*merged[field], *value]
+            else:
+                merged[field] = value
+        return merged
 
     def process(self, chunk: dict[str, Any]) -> list[bytes]:
         if not self.template:
@@ -135,20 +237,22 @@ class _ChoiceGuard:
             index = raw_index if isinstance(raw_index, int) else 0
             delta = choice.get("delta")
             new_delta: dict[str, Any] = dict(delta) if isinstance(delta, dict) else {}
-            redactor = self._redactor(index)
-            had_content = isinstance(new_delta.get("content"), str)
-            if had_content:
-                new_delta["content"] = redactor.feed(new_delta["content"])
+            dropped = self._guard_delta(index, new_delta)
+            new_choice = {**choice, "delta": new_delta}
+            if "logprobs" in new_choice:
+                new_choice["logprobs"] = None
 
             if choice.get("finish_reason") is not None:
-                pending = str(new_delta.pop("content", "")) + redactor.flush()
+                # The client may stop reading at the finish frame, so everything held back
+                # (and this frame's own text) goes out first, in its own frame.
+                fields = (*_TEXT_FIELDS, "tool_calls")
+                pending = {k: new_delta.pop(k) for k in fields if k in new_delta}
+                pending = self._merge(pending, self._flush_choice(index))
                 if pending:
-                    out.append(self._content_frame(index, pending))
-            elif had_content and new_delta["content"] == "":
-                del new_delta["content"]
-                if not new_delta:
-                    continue  # nothing left to say for this choice yet
-            kept.append({**choice, "delta": new_delta})
+                    out.append(self._delta_frame(index, pending))
+            elif dropped and not new_delta:
+                continue  # nothing left to say for this choice yet
+            kept.append(new_choice)
 
         if kept or chunk.get("usage") is not None:
             out.append(self._encode({**chunk, "choices": kept}))
@@ -156,10 +260,10 @@ class _ChoiceGuard:
 
     def flush_all(self) -> list[bytes]:
         out: list[bytes] = []
-        for index, redactor in sorted(self.redactors.items()):
-            tail = redactor.flush()
-            if tail:
-                out.append(self._content_frame(index, tail))
+        for index in sorted({key[0] for key in self.redactors}):
+            delta = self._flush_choice(index)
+            if delta:
+                out.append(self._delta_frame(index, delta))
         return out
 
 
@@ -237,7 +341,7 @@ async def guard_events(
             pii_redactions=guard.redactions,
             forced_flushes=guard.forced_flushes,
             peak_buffer_chars=guard.peak_buffer_chars,
-            choices=len(guard.redactors),
+            choices=guard.choices,
             frames_out=guard.frames_out,
             latency_ms=_elapsed_ms(started),
         )
@@ -256,7 +360,7 @@ async def _guarded_stream(
         async with client.stream("POST", url, json=payload, headers=_upstream_headers()) as resp:
             if resp.status_code != 200:
                 raise _UpstreamError(f"status_{resp.status_code}")
-            async for event in iter_sse(resp.aiter_lines()):
+            async for event in iter_sse(iter_lines(resp.aiter_bytes())):
                 yield event
 
     events = upstream_events()
@@ -268,14 +372,38 @@ async def _guarded_stream(
         await events.aclose()
 
 
+def _redact_strings(value: Any) -> tuple[Any, int]:
+    """A copy of ``value`` with every string anywhere inside it redacted, and the count."""
+    if isinstance(value, str):
+        return redact(value)
+    if isinstance(value, list):
+        total, items = 0, []
+        for item in value:
+            new, n = _redact_strings(item)
+            items.append(new)
+            total += n
+        return items, total
+    if isinstance(value, dict):
+        total, out = 0, {}
+        for key, item in value.items():
+            out[key], n = _redact_strings(item)
+            total += n
+        return out, total
+    return value, 0
+
+
 def redact_completion_body(body: dict[str, Any]) -> int:
-    """Redact every ``choices[].message.content`` in place; returns the redaction count."""
+    """Redact every string in each ``choices[].message`` in place (content, content parts,
+    refusal, tool-call arguments) and drop ``logprobs``; returns the redaction count."""
     total = 0
     choices = body.get("choices")
     for choice in choices if isinstance(choices, list) else []:
-        message = choice.get("message") if isinstance(choice, dict) else None
-        if isinstance(message, dict) and isinstance(message.get("content"), str):
-            message["content"], n = redact(message["content"])
+        if not isinstance(choice, dict):
+            continue
+        if "logprobs" in choice:
+            choice["logprobs"] = None
+        if isinstance(choice.get("message"), dict):
+            choice["message"], n = _redact_strings(choice["message"])
             total += n
     return total
 
@@ -357,6 +485,7 @@ def create_app(
     app = FastAPI(title="Streaming PII guardrail", lifespan=lifespan)
     app.state.settings = resolved
     app.state.client = client
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=resolved.max_request_body_bytes)
     app.add_middleware(CorrelationIdMiddleware)
     install_exception_handlers(app)
     app.add_api_route("/v1/chat/completions", chat_completions, methods=["POST"])

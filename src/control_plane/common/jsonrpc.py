@@ -7,6 +7,7 @@ These operate on plain dicts on purpose. A Pydantic round-trip would coerce or d
 
 from __future__ import annotations
 
+import json
 from enum import IntEnum
 from typing import Any
 
@@ -34,6 +35,21 @@ DEFAULT_MESSAGES: dict[ErrorCode, str] = {
     ErrorCode.UNAUTHORIZED_TOOL_CALL: "Unauthorized Tool Call",
     ErrorCode.UNAUTHENTICATED: "Unauthenticated",
 }
+
+
+def _reject_constant(name: str) -> Any:
+    raise ValueError(f"non-standard JSON constant: {name}")
+
+
+def loads_strict(raw: bytes | str) -> Any:
+    """``json.loads`` limited to RFC 8259. Raises ``ValueError`` for anything that isn't:
+    ``NaN``/``Infinity`` (Python accepts them, and re-serializing would forward non-JSON),
+    and nesting deep enough to overflow the parser, which raises ``RecursionError`` and would
+    otherwise escape as a 500."""
+    try:
+        return json.loads(raw, parse_constant=_reject_constant)
+    except RecursionError as exc:
+        raise ValueError("JSON nested too deeply") from exc
 
 
 def is_valid_id(value: object) -> bool:

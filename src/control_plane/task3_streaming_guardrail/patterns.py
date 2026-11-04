@@ -21,6 +21,7 @@ REDACTED = "[REDACTED]"
 EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}")
 SSN = re.compile(r"(?<![0-9])[0-9]{3}-[0-9]{2}-[0-9]{4}(?![0-9])")
 CC_CANDIDATE = re.compile(r"(?<![0-9])[0-9](?:[ -]?[0-9]){12,18}(?![0-9])")
+PII_PATTERNS = (EMAIL, SSN, CC_CANDIDATE)
 
 # Tail classes used by the streaming redactor: "could this trailing run still grow into PII?"
 EMAIL_TAIL = re.compile(r"[A-Za-z0-9._%+\-@]*\Z")

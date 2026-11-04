@@ -374,7 +374,8 @@ processing).
 
 **Fix.**
 - Tune `CP_PRIMARY_TIMEOUT_SECONDS` to the primary's measured p99 TTFT, not its median.
-  `CP_REQUEST_DEADLINE_SECONDS` bounds the total.
+  `CP_REQUEST_DEADLINE_SECONDS` bounds the total up to the first byte; after that,
+  `CP_STREAM_IDLE_TIMEOUT_SECONDS` (default 30) bounds the gap between chunks.
 - Enable the circuit breaker (`CP_CIRCUIT_BREAKER_ENABLED=true`,
   `CP_CIRCUIT_BREAKER_THRESHOLD`, `CP_CIRCUIT_BREAKER_COOLDOWN_SECONDS`). After N
   consecutive primary failures it skips the primary for the cooldown period and then probes

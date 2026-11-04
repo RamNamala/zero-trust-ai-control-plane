@@ -39,6 +39,7 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
+from control_plane.common.body_limit import BodySizeLimitMiddleware
 from control_plane.common.correlation import CorrelationIdMiddleware, correlation_id_from_scope
 from control_plane.common.errors import (
     ErrorCode,
@@ -395,11 +396,26 @@ def _relay(
         try:
             meter.feed(first)
             yield first
+            idle = ctx.settings.stream_idle_timeout_seconds
             try:
-                async for chunk in it:
+                while True:
+                    # A provider that stalls mid-stream would otherwise hold the connection
+                    # and the reservation forever: no other deadline applies after byte one.
+                    try:
+                        chunk = await asyncio.wait_for(anext(it), timeout=idle)
+                    except StopAsyncIteration:
+                        break
                     meter.feed(chunk)
                     yield chunk
                 status = "ok"
+            except TimeoutError:
+                status = "stream_idle_timeout"
+                _log.warning(
+                    "provider_stream_stalled",
+                    extra={"fields": {"provider": outcome.provider, "idle_seconds": idle}},
+                )
+                envelope = build_envelope(ErrorCode.GATEWAY_TIMEOUT)
+                yield encode_event(json.dumps(envelope), event="error")
             except Exception as exc:
                 # Headers are long gone: report in-band, sanitized.
                 status = "midstream_error"
@@ -543,6 +559,7 @@ def create_app(
     app.state.primary = primary
     app.state.backup = backup
     app.state.breaker = breaker
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=resolved.max_request_body_bytes)
     app.add_middleware(CorrelationIdMiddleware)
     install_exception_handlers(app)
     app.add_api_route("/v1/chat/completions", chat_completions, methods=["POST"])

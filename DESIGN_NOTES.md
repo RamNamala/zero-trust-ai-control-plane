@@ -148,7 +148,8 @@ closer to the code. `docs/PITFALLS.md` has the traps and the evidence for them.
   - The cut moves left until neither class can extend it (a fixpoint), because the classes
     can sit next to each other, e.g. `"...1283 0366."`.
   - The held tail is capped at 256 chars. Beyond that the oldest part is force-flushed and
-    counted (`forced_flushes`).
+    counted (`forced_flushes`). The forced cut never lands inside a complete match: it moves
+    to the match's end, so the value goes out as `[REDACTED]`, not in pieces (PITFALLS #49).
 - **Alternatives:**
   - Hold back a fixed N characters (the blueprint used 36).
   - Hold back to the last whitespace.
@@ -162,9 +163,16 @@ closer to the code. `docs/PITFALLS.md` has the traps and the evidence for them.
   - **Memory:** O(`max_hold`) per stream, never O(response).
   - **Proof:** a Hypothesis property test asserts that, for *any* chunking, output equals
     `redact(full_text)`. The algorithm is pinned to `docs/reference/redactor_reference.py`.
-- **Trade-off made visible:** a single unbroken PII-capable run longer than 256 chars can be
-  split by a forced flush. The counter appears in the trailer and the audit log, so the loss
-  is never silent.
+- **Trade-off made visible:** inside an unbroken PII-capable run longer than 256 chars,
+  output can differ from the one-shot redaction. Complete matches are still redacted, but a
+  match that is still *growing* at the cut point (e.g. an email whose domain is still
+  arriving) may be emitted in two parts. The counter appears in the trailer and the audit
+  log, so this is never silent.
+- **Scope:** every model-written string is guarded: `content`, `refusal`, and tool-call
+  `arguments`, each with its own redactor per choice. `logprobs` is dropped, because it repeats
+  the text split at token boundaries. Regex detection doesn't see through fullwidth digits or
+  zero-width characters inserted into a value; that needs Unicode normalization with offset
+  mapping and is listed under production changes in the README.
 
 ### Redaction count in a trailer frame, not a header
 - **Choice:** a final `event: guardrail` frame with `pii_redactions`, `forced_flushes` and

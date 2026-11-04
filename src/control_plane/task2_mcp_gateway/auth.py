@@ -46,7 +46,7 @@ class Principal:
 
 class AuthError(Exception):
     """``reason`` is one of: missing, malformed, expired, not_yet_valid, invalid, bad_role,
-    dev_tokens_disabled. Safe for logs; never echoed to the caller."""
+    dev_tokens_disabled, duplicate_header. Safe for logs; never echoed to the caller."""
 
     def __init__(self, reason: str) -> None:
         self.reason = reason

@@ -30,7 +30,8 @@ class ChatRequest(BaseModel):
     model: str = Field(min_length=1, max_length=200)
     messages: list[dict[str, Any]] = Field(min_length=1)
     stream: bool = False
-    max_tokens: int | None = Field(default=None, gt=0)
+    # strict: ``true`` or ``"7"`` is a client bug, not a budget; coercing it would hide that.
+    max_tokens: int | None = Field(default=None, gt=0, strict=True)
 
 
 @dataclass(frozen=True)

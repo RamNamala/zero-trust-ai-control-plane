@@ -109,3 +109,24 @@ add more tests freely, but don't rename these.
 | Robustness | `test_stdio_downstream_id_rewriting_handles_concurrent_same_ids` | pass |
 | Robustness | `test_stdio_downstream_recovers_after_child_crash` | pass |
 | Demo | `test_e2e_demo_exits_zero` (runs `python -m control_plane.e2e_demo --fast`) | pass |
+
+## Adversarial review (`tests/test_adversarial.py`, phase 7)
+
+Every test in this file failed before the hardening commit or is a probe that held; see PITFALLS #49–#55.
+
+| Criterion | Test | Status |
+|---|---|---|
+| T1 protocol compliance | `test_t1_unparseable_frames_get_a_jsonrpc_error_response` (`-32700`/`-32600`, `id: null`) | pass |
+| T1 validation | `test_t1_odd_json_types_are_32602_and_never_echoed` | pass |
+| T1 stdio | `test_t1_concurrent_requests_on_one_session`, `test_t1_garbage_frames_do_not_kill_the_session` | pass |
+| T2 parsing | `test_t2_non_standard_json_numbers_are_parse_errors`, `test_t2_deeply_nested_json_is_not_a_500` | pass |
+| T2 authorization | `test_t2_method_spelling_variants_never_bypass_rbac`, `test_t2_non_string_tool_name_is_32602`, `test_t2_params_as_array_for_tools_call_is_32602` | pass |
+| T2 authentication | `test_t2_duplicate_authorization_headers_are_rejected`, `test_t2_forged_jwts_are_401`, `test_t2_bearer_scheme_any_case` | pass |
+| T2 limits | `test_t2_batch_of_1000_messages_is_rejected_without_forwarding`, `test_t2_batch_at_the_cap_is_answered_in_order`, `test_t2_2mb_chunked_body_is_413` | pass |
+| T3 redaction | `test_t3_forced_flush_never_splits_pii`, `test_t3_edge_texts_match_one_shot_redaction` | pass |
+| T3 redaction scope | `test_t3_pii_in_non_content_delta_fields_is_redacted`, `test_t3_non_stream_tool_calls_and_content_parts_are_redacted` | pass |
+| T3 stream handling | `test_t3_empty_and_role_only_deltas_pass_through`, `test_t3_done_twice_yields_one_trailer`, `test_t3_missing_done_flushes_redacted_tail_then_error`, `test_t3_sse_parser_bounds_an_unterminated_frame` | pass |
+| T4 limiter | `test_t4_two_tenants_hammering_concurrently`, `test_t4_reconcile_after_window_expiry_does_not_resurrect`, `test_t4_clock_going_backwards_two_seconds` | pass |
+| T4 input | `test_t4_invalid_max_tokens_is_422_and_charges_nothing`, `test_t4_huge_max_tokens_is_413`, `test_t4_oversized_body_is_413_before_any_provider_call`, `test_t4_oversized_chunked_body_is_413`, `test_t4_estimate_counts_tool_calls_and_names` | pass |
+| T4 resilience | `test_t4_primary_200_with_malformed_json_fails_over`, `test_t4_backup_hanging_forever_respects_total_deadline`, `test_t4_stream_that_stalls_after_first_byte_is_cut_off`, `test_t4_client_cancel_during_primary_wait_releases_reservation` | pass |
+| No leaks | `test_source_has_no_leaky_idioms`, `test_integration_error_paths_leak_nothing` | pass |
