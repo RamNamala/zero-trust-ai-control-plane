@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+  FORCE_COLOR: "0"
+
+jobs:
+  test:
+    name: lint, types, tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install
+        run: uv sync --locked
+
+      - name: Ruff
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Mypy (strict on src)
+        run: uv run mypy src
+
+      - name: Tests (all, including slow and subprocess tests)
+        run: uv run pytest -q
+
+      - name: Acceptance matrix cross-check
+        run: uv run python scripts/check_matrix.py
+
+  e2e-demo:
+    name: end-to-end demo (full 3 s failover timing)
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install
+        run: uv sync --locked
+
+      - name: Run scenarios A-E
+        env:
+          COLUMNS: "120"
+        run: |
+          set -o pipefail
+          uv run python -m control_plane.e2e_demo 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | tee demo_output.txt
+
+      - name: Publish demo output to the job summary
+        if: always()
+        run: |
+          {
+            echo "## End-to-end demo"
+            echo
+            echo "JWT auth -> RBAC -> T1 tool call over stdio -> streamed PII redaction -> 3 s failover -> rate limiting -> sanitized errors."
+            echo
+            echo '```text'
+            cat demo_output.txt 2>/dev/null || echo "(no output)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload demo log (correlation-ID trace across all hops)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-demo-log
+          path: |
+            data/e2e_demo.log
+            demo_output.txt
+          if-no-files-found: warn

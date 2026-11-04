@@ -1,5 +1,7 @@
 # Zero-trust AI & MCP control plane
 
+[![CI](https://github.com/RamNamala/zero-trust-ai-control-plane/actions/workflows/ci.yml/badge.svg)](https://github.com/RamNamala/zero-trust-ai-control-plane/actions/workflows/ci.yml)
+
 The four assessment tasks are built as **one control plane** rather than four scripts. A strict
 **STDIO MCP server** (Task 1) sits behind an **MCP security gateway** with JWT auth and per-tool
 RBAC (Task 2). Model traffic goes through a **resilient router** with an on-disk SQLite token
@@ -24,8 +26,15 @@ command, so nothing needs `make`). `uv run python scripts/check_matrix.py --run`
 every acceptance-matrix row names a test that exists and passes.
 
 `uv run python -m control_plane.e2e_demo --fast` runs the same scenarios with a 0.3 s failover
-timeout for CI. Demo logs go to `data/e2e_demo.log`, and the demo ends by printing a `grep`
-for Scenario B's correlation ID.
+timeout. Demo logs go to `data/e2e_demo.log`, and the demo ends by printing a `grep` for
+Scenario B's correlation ID.
+
+**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push, on Linux
+with Python 3.11 and 3.13: ruff, mypy, all 348 tests and the matrix check, then the demo with
+full 3 s timings. Open any run in the
+[Actions tab](https://github.com/RamNamala/zero-trust-ai-control-plane/actions/workflows/ci.yml):
+its summary page shows the demo's scenario-by-scenario checks, and the correlation-ID log is
+attached as the `e2e-demo-log` artifact.
 
 | Doc | For |
 |---|---|
@@ -193,6 +202,9 @@ failover logic intact (see [DESIGN_NOTES](DESIGN_NOTES.md#streaming-failover-onl
 - **Proof:** [`tests/test_e2e_integration.py`](tests/test_e2e_integration.py) covers
   scenarios A–E, a single correlation ID visible in all hops, 20 concurrent calls all with
   `id: 1`, and child crash → `-32603` → respawn.
+  `test_scenario_b_full_pipeline_failover_tool_call_redaction` is the whole chain in one
+  test: JWT auth → RBAC → T1 tool call over stdio → streamed PII redaction, with the primary
+  timing out and the backup answering both model turns.
 
 ## Running each service standalone
 

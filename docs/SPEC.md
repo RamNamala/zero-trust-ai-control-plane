@@ -10,6 +10,7 @@ docstrings and `ACCEPTANCE_MATRIX.md`; the traps behind several of these decisio
 
 ```text
 zero-trust-ai-control-plane/
+├── .github/workflows/ci.yml     # lint, mypy, tests, matrix check, e2e demo
 ├── README.md                    # architecture, run instructions, design trade-offs
 ├── TROUBLESHOOTING.md           # field-engineer runbook (zero-trust deployment failures)
 ├── DESIGN_NOTES.md              # decisions, alternatives, what changes in production
