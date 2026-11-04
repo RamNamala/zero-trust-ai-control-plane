@@ -19,13 +19,13 @@ closer to the code. `docs/PITFALLS.md` has the traps and the evidence for them.
   arguments, which the brief wants as a *standard JSON-RPC error*, would come back as a
   successful response containing an error message. The low-level handler gives a real
   `{"error":{"code":-32602,...}}` frame with the caller's id.
-- **Cost:** we own the dispatch. Unknown-method handling also needed a fix, because the SDK
+- **Cost:** the handler owns dispatch. Unknown-method handling also needed a fix, because the SDK
   answers unknown methods with `-32602` (PITFALLS #35), and unexpected exceptions with
   `code: 0` and the exception text (PITFALLS #37). Both are covered by tests.
 
 ### `-32602` for an unknown tool name (not `-32601`)
 - **Choice:** `McpError(-32602, "Unknown tool: <name>")`.
-- **Alternative:** `-32601 Method not found`, which is what the original blueprint suggested.
+- **Alternative:** `-32601 Method not found`, the intuitive choice.
 - **Why:** `-32601` means the JSON-RPC *method* doesn't exist, but `tools/call` does exist.
   The tool name is a parameter, and the MCP spec's own example for an unknown tool uses
   `-32602`. Unknown *methods* (e.g. `foo/bar`) still get `-32601`.
@@ -38,8 +38,8 @@ closer to the code. `docs/PITFALLS.md` has the traps and the evidence for them.
     balance) gets `CallToolResult(isError=true)`.
 - **Why:** they mean different things to an agent. A protocol error says "your call was
   invalid; fix the call". A tool error says "the call was fine and the answer is no", which
-  the model can reason about and tell the user. Mixing them up is the most common grading
-  miss on this kind of task.
+  the model can reason about and tell the user. Mixing them up is the most common mistake
+  on this kind of task.
 
 ### Strict Pydantic, `[0-9]`, and an integer amount allowed
 - **Choice:** strict mode with `extra="forbid"`.
@@ -98,8 +98,8 @@ closer to the code. `docs/PITFALLS.md` has the traps and the evidence for them.
 - **Why:**
   - Duplicate ids inside one batch, or two clients both using `id: 1` on one stdio child,
     would cross responses.
-  - Trusting the downstream to echo `"7"` vs `7` vs `null` faithfully is a fidelity risk we
-    don't need to take.
+  - Trusting the downstream to echo `"7"` vs `7` vs `null` faithfully is an avoidable fidelity
+    risk.
 
 ### Policy denial is a local JSON-RPC error with HTTP 200
 - **Choice:** `-32001` answered by the gateway, with the downstream never called (proved
@@ -151,7 +151,7 @@ closer to the code. `docs/PITFALLS.md` has the traps and the evidence for them.
     counted (`forced_flushes`). The forced cut never lands inside a complete match: it moves
     to the match's end, so the value goes out as `[REDACTED]`, not in pieces (PITFALLS #49).
 - **Alternatives:**
-  - Hold back a fixed N characters (the blueprint used 36).
+  - Hold back a fixed N characters (e.g. 36).
   - Hold back to the last whitespace.
   - Buffer the whole response.
 - **Why:**
@@ -266,8 +266,8 @@ closer to the code. `docs/PITFALLS.md` has the traps and the evidence for them.
 ### `asyncio.wait_for` really cancels the primary
 - Timed-out calls are cancelled, not left running. Provider code never wraps awaits in
   `except Exception` that would swallow `CancelledError`, and the mocks record cancellation
-  so the tests can prove it. A zombie primary would keep generating, and billing, after we
-  had already moved on.
+  so the tests can prove it. A zombie primary would keep generating, and billing, after the
+  router had already moved on.
 
 ### Sanitized errors
 - Every error leaving the gateway is the fixed envelope `{code, message, request_id,

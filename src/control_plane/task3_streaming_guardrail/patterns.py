@@ -1,9 +1,9 @@
 """PII patterns and the one-shot ``redact()`` the streaming redactor must agree with.
 
 Ported from ``docs/reference/redactor_reference.py`` (the property-tested contract). Two choices
-differ from the original blueprint on purpose:
+differ from the obvious approach on purpose:
 
-* Cards: the blueprint's ``\\b(?:\\d[ -]*?){13,16}\\b`` matches any long digit run (order numbers,
+* Cards: the common ``\\b(?:\\d[ -]*?){13,16}\\b`` matches any long digit run (order numbers,
   timestamps) and misses 17-19 digit PANs. Here a *candidate* is 13-19 digits with optional single
   space/dash separators, and it is only redacted if the digits pass Luhn.
 * SSNs: anything SSN-shaped is redacted, including "invalid" areas (000, 666, 9xx). Failing closed

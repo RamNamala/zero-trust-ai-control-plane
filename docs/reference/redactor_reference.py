@@ -5,11 +5,11 @@ Status: prototyped and property-tested (Hypothesis, 3,000 random chunkings of a 
 contains emails, dashed + spaced credit cards and SSNs). For every chunking,
     "".join(r.feed(c) for c in chunks) + r.flush() == redact(full_text)
 
-Treat this as the algorithmic contract, NOT as final code. Re-implement it in
-src/control_plane/task3_streaming_guardrail/ with full typing, docstrings, metrics
-(redaction_count, peak_buffer_chars), and the property test in docs/reference/.
+This is the algorithmic contract. The production version in
+src/control_plane/task3_streaming_guardrail/ adds full typing, metrics
+(redaction_count, peak_buffer_chars, forced_flushes) and its own property tests.
 
-Why not a fixed 36-char holdback (as the original blueprint suggested)?
+Why not a fixed 36-char holdback?
   * Emails can legally be up to 254 chars, so a 36-char window leaks long addresses.
   * "4532 0151 1283 0366" contains spaces, so "hold back to the last whitespace" also leaks.
   * Instead: hold back the maximal trailing run of characters that could still be part of a

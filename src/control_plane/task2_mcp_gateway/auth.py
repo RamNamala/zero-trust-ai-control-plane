@@ -4,7 +4,7 @@ The production path is an HS256 JWT with a required ``exp`` (a token that never 
 zero trust) and a configurable leeway for clock skew. The algorithm list is pinned to ``HS256``
 so ``alg: none`` and algorithm-confusion tokens are rejected by PyJWT itself.
 
-The blueprint's static and unsigned base64-JSON tokens let anyone who can type
+Static and unsigned base64-JSON tokens let anyone who can type
 ``{"role":"admin"}`` become admin, so they exist only behind ``allow_insecure_dev_tokens`` (off by
 default, warned at startup). ``AuthError.reason`` is a fixed category for audit logs; callers
 always get the same generic ``Unauthenticated`` response, so failures can't be used as an oracle.

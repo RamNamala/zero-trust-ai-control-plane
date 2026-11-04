@@ -1,7 +1,7 @@
-"""Adversarial review (Phase 7): attempts to break each task from the outside.
+"""Adversarial review: attempts to break each task from the outside.
 
 Every test states the behaviour a hostile or buggy peer should get. Tests that fail on the
-pre-hardening code mark real findings (see the Phase 7 report). The rest are probes that held,
+pre-hardening code mark real findings (see PITFALLS #49-#55). The rest are probes that held,
 kept as regression guards.
 """
 

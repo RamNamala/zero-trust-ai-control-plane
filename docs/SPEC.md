@@ -1,23 +1,25 @@
 # Engineering Spec — Zero-Trust AI & MCP Control Plane
 
-This is the build contract. Section numbers are referenced by the phase prompts and by
-`ACCEPTANCE_MATRIX.md`. Where this spec and the original blueprint disagree, this spec wins;
-the reasons are in `PITFALLS.md`.
+The design the code implements, module by module. Section numbers are referenced from code
+docstrings and `ACCEPTANCE_MATRIX.md`; the traps behind several of these decisions are in
+`PITFALLS.md`.
 
 ---
 
 ## 0. Repository layout
 
 ```text
-ai-control-plane-assessment/
+zero-trust-ai-control-plane/
 ├── README.md                    # architecture, run instructions, design trade-offs
 ├── TROUBLESHOOTING.md           # field-engineer runbook (zero-trust deployment failures)
 ├── DESIGN_NOTES.md              # decisions, alternatives, what changes in production
 ├── pyproject.toml               # uv, hatchling, src layout, ruff, mypy, pytest config
 ├── .env.example
-├── docs/                        # this kit
+├── Makefile                     # shortcuts for the uv commands
+├── docs/                        # spec, acceptance matrix, pitfalls, brief, reference algorithms
 ├── scripts/
 │   ├── bench.py                 # measures gateway overhead (feeds README numbers)
+│   ├── check_matrix.py          # cross-checks ACCEPTANCE_MATRIX.md against pytest
 │   └── dev_tokens.py            # prints HS256 JWTs for admin/viewer for curl demos
 ├── src/control_plane/
 │   ├── __init__.py
@@ -45,10 +47,10 @@ ai-control-plane-assessment/
 │   │   ├── gateway.py           # FastAPI app: POST /v1/chat/completions (stream)
 │   │   └── mock_llm.py          # mock SSE LLM with scripted chunking, delays, disconnect probe
 │   ├── task4_resilient_router/
-│   │   ├── tokens.py            # estimate_tokens(); optional tiktoken
+│   │   ├── tokens.py            # prompt token estimate (chars/4)
 │   │   ├── rate_limiter.py      # SQLite WAL sliding window, reserve/reconcile/release
 │   │   ├── providers.py         # Provider protocol, HttpProvider, fault-injecting mocks
-│   │   ├── circuit_breaker.py   # optional: skip primary while open
+│   │   ├── circuit_breaker.py   # skips the primary while open
 │   │   └── router.py            # failover routing, headers, sanitized errors
 │   ├── integration/
 │   │   ├── app.py               # unified gateway: /v1/chat/completions (T4+T3) and /mcp (T2->T1)
@@ -60,7 +62,8 @@ ai-control-plane-assessment/
     ├── test_task2_mcp_gateway.py
     ├── test_task3_guardrail.py
     ├── test_task4_router.py
-    └── test_e2e_integration.py
+    ├── test_e2e_integration.py
+    └── test_adversarial.py
 ```
 
 ---
@@ -111,7 +114,7 @@ Codes: `-32700` parse error, `-32600` invalid request, `-32601` method not found
 ## 2. Task 1 — STDIO MCP server
 
 ### 2.1 STDIO isolation (`__main__.py`)
-First executable lines, before any other import (copy the pattern from `docs/reference/mcp_stdio_spike.py`):
+First executable lines, before any other import (the pattern verified in `docs/reference/mcp_stdio_spike.py`):
 ```python
 import os, sys
 _REAL_STDOUT_FD = os.dup(1)
@@ -133,7 +136,7 @@ class TriggerRefundInput(BaseModel):
     amount: Annotated[float, Field(gt=0, le=10_000, allow_inf_nan=False)]
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=10, max_length=500)]
 ```
-- Strict mode: strings like `"50"` rejected for `amount`; `true` rejected; JSON integer `50` accepted (Pydantic strict float accepts int — document this choice; a refund of 50 is legitimate). Add a validator rejecting more than 2 decimal places.
+- Strict mode: strings like `"50"` rejected for `amount`; `true` rejected; JSON integer `50` accepted (Pydantic strict float accepts int; a refund of 50 is legitimate). Add a validator rejecting more than 2 decimal places.
 - `inputSchema` advertised in `tools/list` is generated from `model_json_schema()` so the contract and the validator never drift. Include `"additionalProperties": false`.
 
 ### 2.3 Request handling (`server.py`)
@@ -182,7 +185,7 @@ Forwarding rules:
 - Shared `httpx.AsyncClient` (created in lifespan, closed on shutdown), timeouts set, connection pool limits.
 - **Do not forward the client's `Authorization` header** (MCP spec forbids token passthrough). Downstream gets the gateway's own credential (`CP_T2_DOWNSTREAM_TOKEN`) if configured.
 - Forward `Content-Type`, `Accept` (`application/json, text/event-stream`), `Mcp-Session-Id`, `MCP-Protocol-Version`; add `X-Correlation-ID`, `X-Forwarded-For`. Strip hop-by-hop headers both ways.
-- Downstream unreachable/timeout → per-request JSON-RPC `-32603` with generic message "Upstream MCP server unavailable" (no URL), HTTP 200 (or 502 for whole-body failures — pick one, document it).
+- Downstream unreachable/timeout → per-request JSON-RPC `-32603` with generic message "Upstream MCP server unavailable" (no URL), HTTP 200.
 - Response headers: `X-Correlation-ID`, `X-MCP-Caller-Role`, `X-MCP-Policy-Decision: allow|deny|mixed`.
 
 ### 3.4 Downstreams (`downstream.py`)
@@ -240,7 +243,7 @@ Also a `slow_first_then_pause` script for TTFT and a 10k-chunk script for memory
 - Clock is injected (`clock: Callable[[], float] = time.time`). Wall clock (not monotonic) because multiple processes share the DB; note skew implications in DESIGN_NOTES.
 
 ### 5.2 Token accounting (`tokens.py`)
-`estimate_prompt_tokens(messages) = ceil(total_chars / 4) + 4 * len(messages)`; optional `tiktoken` if installed. Reserve `prompt_estimate + max_tokens` (default `max_tokens` 1024 if absent). After completion, reconcile with provider `usage.total_tokens` (or estimate for streams lacking usage).
+`estimate_prompt_tokens(messages) = ceil(total_chars / 4) + 4 * len(messages)`, counting every message field (tool calls, names, content parts). Reserve `prompt_estimate + max_tokens` (default `max_tokens` 1024 if absent). After completion, reconcile with provider `usage.total_tokens` (or estimate for streams lacking usage).
 
 ### 5.3 Providers (`providers.py`)
 `class Provider(Protocol): name: str; async def complete(req) -> CompletionResult; async def stream(req) -> AsyncIterator[bytes]`
@@ -256,7 +259,7 @@ Flow:
 5. Backup gets the remaining request deadline. If backup also fails → `release()` reservation → 502 `GATEWAY_UPSTREAM_FAILURE` envelope.
 6. Success → `reconcile()`; response headers: `X-Routed-Provider: primary|backup`, `X-Failover-Reason: none|http_429|timeout_3000ms|http_5xx|connect_error`, `X-RateLimit-Limit: 50000`, `X-RateLimit-Remaining`, `X-RateLimit-Window-Seconds: 60`, `X-Correlation-ID`. Also put `routed_provider` in a `gateway` metadata field in the JSON body.
 7. Streaming: the 3000 ms timeout applies to **time-to-first-byte** (headers + first chunk). Failover is only possible before the first byte reaches the client; after that, errors become an SSE `event: error` frame. Stream output is piped through the T3 redactor in the integration app.
-8. Optional circuit breaker: after 5 consecutive primary failures, skip primary for 30s (half-open probe after). Header `X-Failover-Reason: circuit_open`.
+8. Circuit breaker: after 5 consecutive primary failures, skip primary for 30s (half-open probe after). Header `X-Failover-Reason: circuit_open`.
 
 ---
 
@@ -280,4 +283,4 @@ Unified FastAPI app mounting:
 ---
 
 ## 7. Non-functional targets (measure, don't claim)
-`scripts/bench.py` measures: T2 policy+parse overhead per request, T3 per-chunk redaction cost and TTFT delta vs. direct mock, T4 `reserve()` latency p50/p99 on disk. README quotes only numbers produced by this script on your machine, with hardware noted.
+`scripts/bench.py` measures: T2 policy+parse overhead per request, T3 per-chunk redaction cost and TTFT delta vs. direct mock, T4 `reserve()` latency p50/p99 on disk. The README quotes only numbers produced by this script, with the hardware noted.

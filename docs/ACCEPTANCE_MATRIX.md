@@ -1,8 +1,7 @@
 # Acceptance Matrix
 
-Every evaluation criterion from the brief maps to code and to named tests. The **Status**
-column (`todo` → `pass`) is updated at the end of each phase. Test names are the contract;
-add more tests freely, but don't rename these.
+Every evaluation criterion from the brief maps to code and to named tests.
+`uv run python scripts/check_matrix.py --run` verifies that each named test exists and passes.
 
 ## Task 1 — MCP server (`tests/test_task1_mcp_server.py`)
 
@@ -110,7 +109,7 @@ add more tests freely, but don't rename these.
 | Robustness | `test_stdio_downstream_recovers_after_child_crash` | pass |
 | Demo | `test_e2e_demo_exits_zero` (runs `python -m control_plane.e2e_demo --fast`) | pass |
 
-## Adversarial review (`tests/test_adversarial.py`, phase 7)
+## Adversarial review (`tests/test_adversarial.py`)
 
 Every test in this file failed before the hardening commit or is a probe that held; see PITFALLS #49–#55.
 

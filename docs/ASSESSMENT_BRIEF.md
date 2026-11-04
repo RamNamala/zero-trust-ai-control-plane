@@ -7,8 +7,9 @@
 MCP security proxy gateways, handling stream guardrails, managing model routing resilience,
 and **troubleshooting zero-trust network deployments**.
 
-> Note: there is no Task 5 for the last item. We cover it through the integration demo,
-> diagnostic headers, correlation IDs, and `TROUBLESHOOTING.md`.
+> The last focus area, troubleshooting zero-trust deployments, has no task of its own. It is
+> addressed by the end-to-end demo, the diagnostic headers, correlation IDs, and
+> [`TROUBLESHOOTING.md`](../TROUBLESHOOTING.md).
 
 ---
 

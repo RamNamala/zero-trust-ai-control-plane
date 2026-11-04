@@ -18,8 +18,8 @@ Two facts this proves:
 
 WARNING: mcp 2.x (2.0.0+) has a different low-level API (constructor callbacks
 on_call_tool=..., add_request_handler(method, params_type, handler), a new runner).
-This spike does NOT run on 2.x. The kit pins mcp>=1.27,<2. If you deliberately move to
-2.x, re-run an equivalent spike first and update the pin in pyproject.toml.
+This spike does NOT run on 2.x. The project pins mcp>=1.27,<2. Moving to 2.x means
+re-running an equivalent spike first and update the pin in pyproject.toml.
 """
 # ---- MUST be the first lines executed in the server entrypoint (__main__.py) ----
 import os
