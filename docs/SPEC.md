@@ -14,7 +14,6 @@ zero-trust-ai-control-plane/
 ├── TROUBLESHOOTING.md           # field-engineer runbook (zero-trust deployment failures)
 ├── DESIGN_NOTES.md              # decisions, alternatives, what changes in production
 ├── pyproject.toml               # uv, hatchling, src layout, ruff, mypy, pytest config
-├── .env.example
 ├── Makefile                     # shortcuts for the uv commands
 ├── docs/                        # spec, acceptance matrix, pitfalls, brief, reference algorithms
 ├── scripts/
