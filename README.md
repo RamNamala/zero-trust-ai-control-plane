@@ -98,7 +98,7 @@ sequenceDiagram
     R->>P: stream(), no first byte in 3000 ms → cancelled
     R->>B: stream()
     B-->>X: summary chunks, email and SSN each split across chunk boundaries
-    X-->>A: "...reached at [REDACTED]; the SSN on file is [REDACTED]..."
+    X-->>A: "...reached at [REDACTED], the SSN on file is [REDACTED]..."
     X-->>A: event: guardrail {pii_redactions: 2, correlation_id: c1}, then [DONE]
 ```
 
