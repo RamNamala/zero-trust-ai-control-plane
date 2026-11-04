@@ -17,7 +17,7 @@ API.
 
 ```bash
 uv sync                                   # Python 3.11+; installs into .venv
-uv run pytest -q                          # 348 tests, ~90 s here (the 4 "slow" ones: ~14 s)
+uv run pytest -q                          # 348 tests, ~60-90 s (the 4 "slow" ones: ~14 s)
 uv run python -m control_plane.e2e_demo   # scenarios A-E with real timings, ~16 s; exit 0 = all passed
 ```
 
