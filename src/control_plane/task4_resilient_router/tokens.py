@@ -2,34 +2,20 @@
 
 The reservation is deliberately pessimistic (prompt estimate + the full ``max_tokens``): it is
 better to briefly hold too much budget and refund it on ``reconcile()`` than to let a burst of
-requests jointly overdraw the window. ``tiktoken`` is used when installed; the chars/4
-heuristic is the fallback and is what tests rely on.
+requests jointly overdraw the window. The estimate is chars/4: a real tokenizer would be
+closer, but every reservation is reconciled to the provider's reported ``usage`` anyway, so
+the estimate only has to be in the right range (see README, "Known limitations").
 """
 
 from __future__ import annotations
 
 import json
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import Any
 
 DEFAULT_MAX_TOKENS = 1024
 PER_MESSAGE_OVERHEAD = 4  # role/separator framing tokens per chat message
-
-
-def _load_tiktoken() -> Callable[[str], int] | None:
-    try:
-        import tiktoken  # type: ignore[import-not-found, unused-ignore]
-    except ImportError:
-        return None
-    try:
-        enc = tiktoken.get_encoding("cl100k_base")
-    except Exception:  # encoding files may need network on first use; fall back quietly
-        return None
-    return lambda text: len(enc.encode(text))
-
-
-_tiktoken_count = _load_tiktoken()
 
 
 def _message_text(message: dict[str, Any]) -> str:
@@ -44,14 +30,9 @@ def _message_text(message: dict[str, Any]) -> str:
     return "".join(parts)
 
 
-def estimate_prompt_tokens(
-    messages: Sequence[dict[str, Any]], *, use_tiktoken: bool = False
-) -> int:
-    texts = [_message_text(m) for m in messages]
-    overhead = PER_MESSAGE_OVERHEAD * len(messages)
-    if use_tiktoken and _tiktoken_count is not None:
-        return sum(_tiktoken_count(t) for t in texts) + overhead
-    return math.ceil(sum(len(t) for t in texts) / 4) + overhead
+def estimate_prompt_tokens(messages: Sequence[dict[str, Any]]) -> int:
+    chars = sum(len(_message_text(m)) for m in messages)
+    return math.ceil(chars / 4) + PER_MESSAGE_OVERHEAD * len(messages)
 
 
 def estimate_text_tokens(text: str) -> int:

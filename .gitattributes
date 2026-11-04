@@ -1,2 +1,4 @@
 # Shell scripts must keep LF endings or bash fails on "\r" (core.autocrlf=true on Windows).
 *.sh text eol=lf
+# Same for the Makefile: make chokes on carriage returns in recipes.
+Makefile text eol=lf

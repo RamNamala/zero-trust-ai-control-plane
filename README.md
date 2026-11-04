@@ -6,7 +6,7 @@ RBAC (Task 2). Model traffic goes through a **resilient router** with an on-disk
 budget and 3 s primary→backup failover (Task 4), and every model answer passes a **streaming
 PII guardrail** (Task 3) on the way out. A single correlation ID follows a request through
 every hop, including the T1 child process's stderr. An end-to-end demo drives one full agent
-turn through all four, and 262 tests check every evaluation criterion.
+turn through all four, and 348 tests check every evaluation criterion.
 
 Everything runs locally: upstream models and MCP servers are mocks, and nothing calls a paid
 API.
@@ -15,9 +15,13 @@ API.
 
 ```bash
 uv sync                                   # Python 3.11+; installs into .venv
-uv run pytest -q                          # 262 tests, ~73 s here (the 4 "slow" ones: ~13 s)
+uv run pytest -q                          # 348 tests, ~90 s here (the 4 "slow" ones: ~14 s)
 uv run python -m control_plane.e2e_demo   # scenarios A-E with real timings, ~16 s; exit 0 = all passed
 ```
+
+With `make`: `make install test-all lint demo` (see `make help`; each target is the plain `uv`
+command, so nothing needs `make`). `uv run python scripts/check_matrix.py --run` checks that
+every acceptance-matrix row names a test that exists and passes.
 
 `uv run python -m control_plane.e2e_demo --fast` runs the same scenarios with a 0.3 s failover
 timeout for CI. Demo logs go to `data/e2e_demo.log`, and the demo ends by printing a `grep`
